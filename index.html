@@ -19,6 +19,7 @@
     var range = document.querySelector('input')
 
     var buffers = []
+    var size = 0
 
     if (navigator.mediaDevices) {
       console.log('getUserMedia supported.')
@@ -82,24 +83,25 @@
           // 输出缓冲区包含将被修改和播放的样本
           var outputBuffer = audioProcessingEvent.outputBuffer
 
-          var inputData = inputBuffer.getChannelData(0)
+          var inputData = new Float32Array(inputBuffer.getChannelData(0))
 
 
   
           // console.log('encodePCM(inputData)', encodePCM(inputData))
-          const int16Array = new Int16Array(inputData.buffer)
-          const alaw = alawmulaw.alaw.encode(int16Array)
+          // const int16Array = new Int16Array(inputData.buffer)
+          // const alaw = alawmulaw.alaw.encode(int16Array)
           console.log('inputData', inputData)
-          console.log('inputData2', inputData instanceof Float32Array)
+          // console.log('inputData2', inputData instanceof Float32Array)
           // // console.log('new Int16Array(f32.buffer)', int16Array)
           // console.log('alawmulaw.alaw', alaw)
 
-          socket.emit('voice', alaw)
+          // socket.emit('voice', int16Array)
           if(socket.readyState==1){
             // ws进入连接状态，则每隔500毫秒发送一包数据
 
           }
-          // buffers.push(inputData)
+          buffers.push(inputData)
+          size += inputData.length
           // var outputData = outputBuffer.getChannelData(0)
           // console.log('inputData', inputData)
           // console.log('outputData', outputData)
@@ -122,6 +124,53 @@
           socket.disconnect()
           source.disconnect(scriptNode)
           scriptNode.disconnect(audioContext.destination)
+
+          console.log(1, buffers)
+          // console.log(2, combine(buffers, size))
+          const data = combine(buffers, size)
+          console.log(data)
+          const pcm = encodePCM(data)
+          console.log(111, data.buffer)
+          console.log(222, pcm)
+          float32ToFile(pcm.buffer)
+        }
+
+        function combine(buffer, size) {
+          var data = new Float32Array(size);
+          var offset = 0; // 偏移量计算
+          // 将二维数据，转成一维数据
+          for (var i = 0; i < buffer.length; i++) {
+            data.set(buffer[i], offset);
+            offset += buffer[i].length;
+          }
+
+          return data;
+        }
+
+        function float32ToFile(buffer) {
+          const blob = new Blob([buffer])
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.download = '11111.pcm'
+          a.href = url
+          a.click()
+        }
+
+        function encodePCM (bytes) {
+          let sampleBits = 16,
+              offset = 0,
+              dataLength = bytes.length * (sampleBits / 8),
+              buffer = new ArrayBuffer(dataLength),
+              data = new DataView(buffer);
+
+          for (var i = 0; i < bytes.length; i++, offset += 2) {
+            var s = Math.max(-1, Math.min(1, bytes[i]));
+            // 16位直接乘就行了
+            data.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+          }
+
+          return data
+
         }
 
         const play = (buffer) => {
