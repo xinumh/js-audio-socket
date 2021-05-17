@@ -91,8 +91,17 @@
           // const int16Array = new Int16Array(inputData.buffer)
           // const alaw = alawmulaw.alaw.encode(int16Array)
           console.log('inputData', inputData)
+          // // console.log(`compress(inputData)`, compress(inputData))
+          
+          const compressedData = compress(inputData)
+
+          // const pcmData = encodePCM(compressedData)
+
+          // console.log(`pcmData`, pcmData)
           // console.log('inputData2', inputData instanceof Float32Array)
           // // console.log('new Int16Array(f32.buffer)', int16Array)
+          // const pcm16 = new Int16Array(new Int8Array([1000]))
+          // console.log(pcm16, 1)
           // console.log('alawmulaw.alaw', alaw)
 
           // socket.emit('voice', int16Array)
@@ -100,8 +109,8 @@
             // ws进入连接状态，则每隔500毫秒发送一包数据
 
           }
-          buffers.push(inputData)
-          size += inputData.length
+          buffers.push(compressedData)
+          size += compressedData.length
           // var outputData = outputBuffer.getChannelData(0)
           // console.log('inputData', inputData)
           // console.log('outputData', outputData)
@@ -128,11 +137,62 @@
           console.log(1, buffers)
           // console.log(2, combine(buffers, size))
           const data = combine(buffers, size)
-          console.log(data)
-          const pcm = encodePCM(data)
-          console.log(111, data.buffer)
-          console.log(222, pcm)
-          float32ToFile(pcm.buffer)
+          console.log('data', data)
+          // const compressedData = compress(data.buffer)
+
+          const pcmData = encodePCM(data)
+          console.log(444, pcmData)
+          // const pcm = encodePCM(data)
+          const al = alawmulaw.alaw.encode(pcmData.buffer)
+          console.log('al', al)
+          // console.log(111, pcmData.buffer)
+          // console.log(222, data)
+
+
+          float32ToFile(al.buffer)
+        }
+
+        // 压缩
+        function compress (data, inputSampleRate = 48000, outputSampleRate = 8000) {
+          let rate = inputSampleRate / outputSampleRate, // 每rate位取一位
+              compression = Math.max(rate, 1),
+              length = Math.floor(( data.length ) / rate),
+              result = new Float32Array(length),
+              index = 0,
+              j = 0;
+          while(index < length) {
+            result[index] = data[j]
+            index++
+            j += compression
+          }
+          return result
+        }
+
+        /**
+         * 转换到我们需要的对应格式的编码
+         *
+         * @param {float32array} bytes      pcm二进制数据
+         * @param {number}  sampleBits      采样位数
+         * @param {boolean} littleEdian     是否是小端字节序
+         * @returns {dataview}              pcm二进制数据
+         */
+        function encodePCM (bytes) {
+          // 此处后三个参数固定，方便查看
+          let sampleBits = 16,
+              littleEdian = true,
+              offset = 0,
+              dataLength = bytes.length * (sampleBits / 8),
+              buffer = new ArrayBuffer(dataLength),
+              data = new DataView(buffer);
+
+          for (var i = 0; i < bytes.length; i++, offset += 2) {
+            var s = Math.max(-1, Math.min(1, bytes[i]));
+            // 16位直接乘就行了
+            data.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, littleEdian);
+          }
+
+          return data
+
         }
 
         function combine(buffer, size) {
@@ -151,27 +211,14 @@
           const blob = new Blob([buffer])
           const url = window.URL.createObjectURL(blob)
           const a = document.createElement('a')
-          a.download = '11111.pcm'
+          a.download = '11111.g711'
           a.href = url
           a.click()
         }
 
-        function encodePCM (bytes) {
-          let sampleBits = 16,
-              offset = 0,
-              dataLength = bytes.length * (sampleBits / 8),
-              buffer = new ArrayBuffer(dataLength),
-              data = new DataView(buffer);
 
-          for (var i = 0; i < bytes.length; i++, offset += 2) {
-            var s = Math.max(-1, Math.min(1, bytes[i]));
-            // 16位直接乘就行了
-            data.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-          }
 
-          return data
-
-        }
+        
 
         const play = (buffer) => {
           const soundSource = audioContext.createBufferSource() // 音源，连接设备
